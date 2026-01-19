@@ -3,7 +3,8 @@ import { View, StyleSheet, Image, ScrollView, Alert, Platform } from 'react-nati
 import { TextInput, Button, Text } from 'react-native-paper';
 import { useProducts } from '../contexts/ProductContext';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import BarcodeScanner, { CameraView } from '@pushpendersingh/react-native-scanner';
+
 import * as ImagePicker from 'expo-image-picker';
 
 type ParamList = {
@@ -25,7 +26,8 @@ const ProductFormScreen = () => {
   
   const [isScanning, setIsScanning] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
-  const [permission, requestPermission] = useCameraPermissions();
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+
 
   // Initial load
   useEffect(() => {
@@ -122,26 +124,47 @@ const ProductFormScreen = () => {
     }
   };
 
-  const onBarcodeDetected = ({ data }: { data: string }) => {
-      stopScanningProcess();
-      handleBarCodeScanned(data);
+  const startScanningProcess = async () => {
+      const granted = await BarcodeScanner.hasCameraPermission();
+      setHasPermission(granted);
+      if (!granted) {
+          const status = await BarcodeScanner.requestCameraPermission();
+          setHasPermission(status);
+          if (!status) {
+              Alert.alert('Lỗi', 'Cần cấp quyền Camera để quét mã');
+              return;
+          }
+      }
+      
+      setIsScanning(true);
+      await BarcodeScanner.startScanning((results) => {
+          if (results && results.length > 0) {
+              onBarcodeDetected(results[0]);
+          }
+      });
   };
 
-  const startScanningProcess = async () => {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync(); 
-      // Reuse imagepicker permission for now or use useCameraPermissions
-      // Actually let's use the explicit one inside component text
-      setIsScanning(true);
+  const onBarcodeDetected = (result: any) => {
+      stopScanningProcess();
+      handleBarCodeScanned(result.data);
   };
+
 
   const stopScanningProcess = async () => {
       setIsScanning(false);
       setTorchOn(false);
+      await BarcodeScanner.stopScanning();
   };
 
   const toggleTorch = async () => {
+      if (torchOn) {
+          await BarcodeScanner.disableFlashlight();
+      } else {
+          await BarcodeScanner.enableFlashlight();
+      }
       setTorchOn(prev => !prev);
   };
+
 
   const handleBarCodeScanned = (data: string) => {
     // Check if product exists
@@ -161,18 +184,10 @@ const ProductFormScreen = () => {
   };
 
   if (isScanning) {
-    if (!permission?.granted) {
-       requestPermission();
-    }
-
     return (
       <View style={{ flex: 1, backgroundColor: 'black' }}>
-        <CameraView 
-            style={StyleSheet.absoluteFill}
-            facing="back" 
-            onBarcodeScanned={onBarcodeDetected}
-            enableTorch={torchOn}
-        />
+        <CameraView style={StyleSheet.absoluteFill} />
+
         
         <View style={styles.scanControls}>
             <Button 

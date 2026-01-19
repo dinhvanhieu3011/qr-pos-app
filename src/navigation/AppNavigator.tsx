@@ -9,6 +9,7 @@ import ProductFormScreen from '../screens/ProductFormScreen';
 import CartScreen from '../screens/CartScreen';
 import InvoiceHistoryScreen from '../screens/InvoiceHistoryScreen';
 import InvoiceDetailScreen from '../screens/InvoiceDetailScreen';
+import LoginScreen from '../screens/LoginScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -39,7 +40,12 @@ const TabNavigator = () => {
 
 const AppNavigator = () => {
   return (
-    <Stack.Navigator>
+    <Stack.Navigator initialRouteName="Login">
+      <Stack.Screen 
+        name="Login" 
+        component={LoginScreen} 
+        options={{ headerShown: false }} 
+      />
       <Stack.Screen 
         name="Main" 
         component={TabNavigator} 

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, StyleSheet, Vibration, Alert } from 'react-native';
+import { View, StyleSheet, Vibration, Alert, Platform } from 'react-native';
 import { Text, Button, Card } from 'react-native-paper';
-import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useNavigation, useIsFocused, useFocusEffect } from '@react-navigation/native';
+import BarcodeScanner, { CameraView } from '@pushpendersingh/react-native-scanner';
+
 import { useProducts } from '../contexts/ProductContext';
 import { useCart } from '../contexts/CartContext';
 import { Product } from '../types';
@@ -10,41 +11,61 @@ import { AppTheme, clayStyles } from '../theme';
 
 const PosScreen = () => {
   const navigation = useNavigation<any>();
+  const isFocused = useIsFocused();
   const { getProductByQr } = useProducts();
   const { addToCart, totalItems, totalAmount } = useCart();
   
   const [lastScanned, setLastScanned] = useState<Product | null>(null);
-  const [permission, requestPermission] = useCameraPermissions();
-  const [hasPermission, setHasPermission] = useState(false);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+
 
   // Debounce scanning using refs for synchronous checks
   const lastScannedCode = useRef<string | null>(null);
   const lastScanTime = useRef<number>(0);
 
-  // Init permission on mount
+  // Check permission on mount
   useEffect(() => {
-    if (permission?.granted) {
-        setHasPermission(true);
-    } else if (permission && !permission.granted && permission.canAskAgain) {
-         requestPermission().then((p: any) => setHasPermission(p.granted));
+    checkPermission();
+  }, []);
+
+  const checkPermission = async () => {
+    const granted = await BarcodeScanner.hasCameraPermission();
+    setHasPermission(granted);
+    if (!granted) {
+      const status = await BarcodeScanner.requestCameraPermission();
+      setHasPermission(status);
     }
-  }, [permission]);
+  };
+
 
   // Use useFocusEffect to manage scanning lifecycle
   useFocusEffect(
     useCallback(() => {
-      // Screen focused
-      let isActive = true;
+      let isSubscribed = true;
 
-      // CameraView handles lifecycle automatically essentially, but we can pause/resume if needed.
-      // For now, simple mount/unmount is fine.
+      const startScanning = async () => {
+        if (hasPermission) {
+          try {
+            await BarcodeScanner.startScanning((results) => {
+              if (isSubscribed && results && results.length > 0) {
+                handleBarCodeScanned(results[0].data);
+              }
+            });
+          } catch (e) {
+            console.error('Error starting scanner:', e);
+          }
+        }
+      };
+
+      startScanning();
 
       return () => {
-        // Screen unfocused
-        isActive = false;
+        isSubscribed = false;
+        BarcodeScanner.stopScanning();
       };
-    }, [])
+    }, [hasPermission])
   );
+
 
   const handleBarCodeScanned = (data: string) => {
     const now = Date.now();
@@ -70,28 +91,30 @@ const PosScreen = () => {
     }
   };
 
-  if (!hasPermission) {
+  if (hasPermission === false) {
     return (
       <View style={styles.center}>
         <Text style={{marginBottom: 10}}>Cần quyền Camera để bán hàng</Text>
-        <Button mode="contained" onPress={async () => {
-            const { status } = await requestPermission();
-            setHasPermission(status === 'granted');
-        }}>Cấp quyền</Button>
+        <Button mode="contained" onPress={checkPermission}>Cấp quyền</Button>
       </View>
     );
   }
 
+  if (hasPermission === null) {
+    return (
+      <View style={styles.center}>
+        <Text>Đang kiểm tra quyền...</Text>
+      </View>
+    );
+  }
+
+
   return (
     <View style={styles.container}>
-       <CameraView 
-          style={StyleSheet.absoluteFill}
-          facing="back"
-          onBarcodeScanned={({ data }: { data: string }) => handleBarCodeScanned(data)}
-          barcodeScannerSettings={{
-            barcodeTypes: ["qr", "ean13", "ean8", "upc_e", "upc_a"],
-          }}
-       />
+      {isFocused && (
+        <CameraView style={StyleSheet.absoluteFill} />
+      )}
+
 
       {/* Overlay for Last Scanned Item */}
       {lastScanned && (
