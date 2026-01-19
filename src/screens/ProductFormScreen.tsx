@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Image, Keyboard, ScrollView, Alert, Modal } from 'react-native';
-import { TextInput, Button, Text, HelperText, Appbar } from 'react-native-paper';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, Image, ScrollView, Alert, Platform } from 'react-native';
+import { TextInput, Button, Text } from 'react-native-paper';
 import { useProducts } from '../contexts/ProductContext';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, BarcodeScanner, BarcodeResult } from '@pushpendersingh/react-native-scanner';
 import * as ImagePicker from 'expo-image-picker';
 
 type ParamList = {
@@ -23,13 +23,13 @@ const ProductFormScreen = () => {
   const [qrCode, setQrCode] = useState('');
   const [imageUri, setImageUri] = useState<string | undefined>(undefined);
   
-  const [permission, requestPermission] = useCameraPermissions();
   const [isScanning, setIsScanning] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
 
   // Initial load
   useEffect(() => {
     if (route.params?.scanFirst) {
-      setIsScanning(true);
+        startScanningProcess();
     }
   }, [route.params?.scanFirst]);
 
@@ -44,6 +44,14 @@ const ProductFormScreen = () => {
       }
     }
   }, [activeProductId, products]);
+
+  // Clean up on unmount or when scanning stops
+  useEffect(() => {
+    return () => {
+        BarcodeScanner.stopScanning();
+        BarcodeScanner.releaseCamera();
+    };
+  }, []);
 
   const handleSave = async () => {
     if (!name || !price || !qrCode) {
@@ -114,9 +122,45 @@ const ProductFormScreen = () => {
     }
   };
 
-  const handleBarCodeScanned = ({ data }: { data: string }) => {
-    setIsScanning(false);
-    
+  const onBarcodeDetected = (barcodes: BarcodeResult[]) => {
+      if (barcodes && barcodes.length > 0) {
+          const data = barcodes[0].data;
+          stopScanningProcess();
+          handleBarCodeScanned(data);
+      }
+  };
+
+  const startScanningProcess = async () => {
+      const granted = await BarcodeScanner.requestCameraPermission();
+      if (!granted) {
+          Alert.alert('Lỗi', 'Cần cấp quyền camera để quét mã');
+          return;
+      }
+      setIsScanning(true);
+      await BarcodeScanner.startScanning(onBarcodeDetected);
+  };
+
+  const stopScanningProcess = async () => {
+      await BarcodeScanner.stopScanning();
+      setIsScanning(false);
+      setTorchOn(false);
+  };
+
+  const toggleTorch = async () => {
+      try {
+          if (torchOn) {
+              await BarcodeScanner.disableFlashlight();
+              setTorchOn(false);
+          } else {
+              await BarcodeScanner.enableFlashlight();
+              setTorchOn(true);
+          }
+      } catch (e) {
+          console.error("Torch error", e);
+      }
+  };
+
+  const handleBarCodeScanned = (data: string) => {
     // Check if product exists
     const existingProduct = getProductByQr(data);
     
@@ -134,38 +178,26 @@ const ProductFormScreen = () => {
   };
 
   if (isScanning) {
-    if (!permission) {
-      // Camera permissions are still loading
-      return <View />;
-    }
-
-    if (!permission.granted) {
-       return (
-        <View style={styles.permissionContainer}>
-          <Text style={{ textAlign: 'center', marginBottom: 20 }}>Cần cấp quyền Camera để quét mã</Text>
-          <Button mode="contained" onPress={requestPermission}>Cấp quyền</Button>
-          <Button style={{marginTop: 20}} onPress={() => setIsScanning(false)}>Hủy</Button>
-        </View>
-      );
-    }
-
     return (
-      <View style={{ flex: 1 }}>
-        <CameraView
-          style={StyleSheet.absoluteFillObject}
-          onBarcodeScanned={handleBarCodeScanned}
-          barcodeScannerSettings={{
-             barcodeTypes: ["qr", "ean13", "ean8", "pdf417", "upc_e", "code128"],
-          }}
-
-        />
-        <Button 
-          mode="contained" 
-          style={styles.cancelScanButton} 
-          onPress={() => setIsScanning(false)}
-        >
-          Hủy Quét
-        </Button>
+      <View style={{ flex: 1, backgroundColor: 'black' }}>
+        <CameraView style={StyleSheet.absoluteFill} />
+        
+        <View style={styles.scanControls}>
+            <Button 
+                mode="contained" 
+                onPress={toggleTorch}
+                style={{marginBottom: 10, backgroundColor: 'rgba(0,0,0,0.5)'}}
+            >
+                {torchOn ? 'Tắt Đèn' : 'Bật Đèn'}
+            </Button>
+            <Button 
+                mode="contained" 
+                style={styles.cancelScanButton} 
+                onPress={stopScanningProcess}
+            >
+                Hủy Quét
+            </Button>
+        </View>
       </View>
     );
   }
@@ -202,7 +234,7 @@ const ProductFormScreen = () => {
           <Button 
             icon="qrcode-scan" 
             mode="outlined" 
-            onPress={() => setIsScanning(true)}
+            onPress={startScanningProcess}
             style={styles.scanButton}
           >
             Quét
@@ -287,10 +319,14 @@ const styles = StyleSheet.create({
   saveButton: {
     marginTop: 10,
   },
-  cancelScanButton: {
+  scanControls: {
     position: 'absolute',
     bottom: 50,
-    alignSelf: 'center',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  cancelScanButton: {
     backgroundColor: 'red',
   },
 });

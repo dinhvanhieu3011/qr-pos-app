@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, StyleSheet, Vibration, Alert } from 'react-native';
-import { Text, Button, FAB, Card } from 'react-native-paper';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { Text, Button, Card } from 'react-native-paper';
+import { CameraView, BarcodeScanner, BarcodeResult } from '@pushpendersingh/react-native-scanner';
+import { useNavigation, useIsFocused, useFocusEffect } from '@react-navigation/native';
 import { useProducts } from '../contexts/ProductContext';
 import { useCart } from '../contexts/CartContext';
 import { Product } from '../types';
@@ -10,18 +10,55 @@ import { AppTheme, clayStyles } from '../theme';
 
 const PosScreen = () => {
   const navigation = useNavigation<any>();
-  const isFocused = useIsFocused();
-  const [permission, requestPermission] = useCameraPermissions();
   const { getProductByQr } = useProducts();
   const { addToCart, totalItems, totalAmount } = useCart();
   
   const [lastScanned, setLastScanned] = useState<Product | null>(null);
+  const [hasPermission, setHasPermission] = useState(false);
 
   // Debounce scanning using refs for synchronous checks
-  const lastScannedCode = React.useRef<string | null>(null);
-  const lastScanTime = React.useRef<number>(0);
+  const lastScannedCode = useRef<string | null>(null);
+  const lastScanTime = useRef<number>(0);
 
-  const handleBarCodeScanned = ({ data }: { data: string }) => {
+  // Init permission on mount
+  useEffect(() => {
+    (async () => {
+        const granted = await BarcodeScanner.requestCameraPermission();
+        setHasPermission(granted);
+    })();
+  }, []);
+
+  // Use useFocusEffect to manage scanning lifecycle
+  useFocusEffect(
+    useCallback(() => {
+      // Screen focused
+      let isActive = true;
+
+      const start = async () => {
+        if (!hasPermission) return;
+        try {
+            await BarcodeScanner.startScanning((barcodes) => {
+                if (barcodes.length > 0) {
+                    const data = barcodes[0].data;
+                    handleBarCodeScanned(data);
+                }
+            });
+        } catch (e) {
+            console.error("Failed start scanning", e);
+        }
+      };
+
+      start();
+
+      return () => {
+        // Screen unfocused
+        isActive = false;
+        BarcodeScanner.stopScanning();
+      };
+    }, [hasPermission])
+  );
+
+  const handleBarCodeScanned = (data: string) => {
     const now = Date.now();
     // Prevent same code scanning within 2 seconds
     if (data === lastScannedCode.current && now - lastScanTime.current < 2000) {
@@ -36,33 +73,30 @@ const PosScreen = () => {
       Vibration.vibrate();
       addToCart(product);
       setLastScanned(product);
+      // Wait a bit before navigating to Cart, or just show notification?
+      // Navigation immediately might be jarring with imperative scanner.
+      // But let's follow logic:
       navigation.navigate('Cart');
     } else {
        Vibration.vibrate([0, 200, 100, 200]); // Error pattern
     }
   };
 
-  if (!permission) return <View />;
-  if (!permission.granted) {
+  if (!hasPermission) {
     return (
       <View style={styles.center}>
         <Text style={{marginBottom: 10}}>Cần quyền Camera để bán hàng</Text>
-        <Button mode="contained" onPress={requestPermission}>Cấp quyền</Button>
+        <Button mode="contained" onPress={async () => {
+            const granted = await BarcodeScanner.requestCameraPermission();
+            setHasPermission(granted);
+        }}>Cấp quyền</Button>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      {isFocused && (
-        <CameraView
-          style={StyleSheet.absoluteFillObject}
-          onBarcodeScanned={handleBarCodeScanned}
-          barcodeScannerSettings={{
-            barcodeTypes: ["qr", "ean13", "ean8", "pdf417", "upc_e", "code128"],
-          }}
-        />
-      )}
+       <CameraView style={StyleSheet.absoluteFill} />
 
       {/* Overlay for Last Scanned Item */}
       {lastScanned && (
