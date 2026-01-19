@@ -22,8 +22,11 @@
     },
     "android": {
       "package": "com.qrposapp",
+      "permissions": [
+        "CAMERA"
+      ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./src/assets/dragonball/icon_4star.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -31,6 +34,14 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera"
+        }
+      ]
+    ]
   }
 }

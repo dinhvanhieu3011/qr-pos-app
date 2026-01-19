@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, StyleSheet, Vibration, Alert } from 'react-native';
 import { Text, Button, Card } from 'react-native-paper';
-import { CameraView, BarcodeScanner, BarcodeResult } from '@pushpendersingh/react-native-scanner';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useNavigation, useIsFocused, useFocusEffect } from '@react-navigation/native';
 import { useProducts } from '../contexts/ProductContext';
 import { useCart } from '../contexts/CartContext';
@@ -14,6 +14,7 @@ const PosScreen = () => {
   const { addToCart, totalItems, totalAmount } = useCart();
   
   const [lastScanned, setLastScanned] = useState<Product | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [hasPermission, setHasPermission] = useState(false);
 
   // Debounce scanning using refs for synchronous checks
@@ -22,11 +23,12 @@ const PosScreen = () => {
 
   // Init permission on mount
   useEffect(() => {
-    (async () => {
-        const granted = await BarcodeScanner.requestCameraPermission();
-        setHasPermission(granted);
-    })();
-  }, []);
+    if (permission?.granted) {
+        setHasPermission(true);
+    } else if (permission && !permission.granted && permission.canAskAgain) {
+         requestPermission().then((p: any) => setHasPermission(p.granted));
+    }
+  }, [permission]);
 
   // Use useFocusEffect to manage scanning lifecycle
   useFocusEffect(
@@ -34,28 +36,14 @@ const PosScreen = () => {
       // Screen focused
       let isActive = true;
 
-      const start = async () => {
-        if (!hasPermission) return;
-        try {
-            await BarcodeScanner.startScanning((barcodes) => {
-                if (barcodes.length > 0) {
-                    const data = barcodes[0].data;
-                    handleBarCodeScanned(data);
-                }
-            });
-        } catch (e) {
-            console.error("Failed start scanning", e);
-        }
-      };
-
-      start();
+      // CameraView handles lifecycle automatically essentially, but we can pause/resume if needed.
+      // For now, simple mount/unmount is fine.
 
       return () => {
         // Screen unfocused
         isActive = false;
-        BarcodeScanner.stopScanning();
       };
-    }, [hasPermission])
+    }, [])
   );
 
   const handleBarCodeScanned = (data: string) => {
@@ -87,8 +75,8 @@ const PosScreen = () => {
       <View style={styles.center}>
         <Text style={{marginBottom: 10}}>Cần quyền Camera để bán hàng</Text>
         <Button mode="contained" onPress={async () => {
-            const granted = await BarcodeScanner.requestCameraPermission();
-            setHasPermission(granted);
+            const { status } = await requestPermission();
+            setHasPermission(status === 'granted');
         }}>Cấp quyền</Button>
       </View>
     );
@@ -96,7 +84,14 @@ const PosScreen = () => {
 
   return (
     <View style={styles.container}>
-       <CameraView style={StyleSheet.absoluteFill} />
+       <CameraView 
+          style={StyleSheet.absoluteFill}
+          facing="back"
+          onBarcodeScanned={({ data }: { data: string }) => handleBarCodeScanned(data)}
+          barcodeScannerSettings={{
+            barcodeTypes: ["qr", "ean13", "ean8", "upc_e", "upc_a"],
+          }}
+       />
 
       {/* Overlay for Last Scanned Item */}
       {lastScanned && (
