@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, StyleSheet, Vibration, Alert, Platform } from 'react-native';
-import { Text, Button, Card } from 'react-native-paper';
+import { Text, Button, Card, IconButton } from 'react-native-paper';
 import { useNavigation, useIsFocused, useFocusEffect } from '@react-navigation/native';
 import BarcodeScanner, { CameraView } from '@pushpendersingh/react-native-scanner';
 
 import { useProducts } from '../contexts/ProductContext';
 import { useCart } from '../contexts/CartContext';
+import { useAuth } from '../contexts/AuthContext';
 import { Product } from '../types';
 import { AppTheme, clayStyles } from '../theme';
 
@@ -14,6 +15,7 @@ const PosScreen = () => {
   const isFocused = useIsFocused();
   const { getProductByQr } = useProducts();
   const { addToCart, totalItems, totalAmount } = useCart();
+  const { logout } = useAuth();
   
   const [lastScanned, setLastScanned] = useState<Product | null>(null);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -126,6 +128,21 @@ const PosScreen = () => {
         </Card>
       )}
 
+      {/* Logout Button */}
+      <IconButton
+        icon="logout"
+        iconColor="white"
+        containerColor="rgba(0,0,0,0.5)"
+        size={24}
+        style={styles.logoutButton}
+        onPress={() => {
+          Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất?', [
+            { text: 'Hủy', style: 'cancel' },
+            { text: 'Đăng xuất', onPress: logout }
+          ]);
+        }}
+      />
+
        {/* Bottom Control Bar */}
        <View style={styles.bottomBar}>
           <View style={styles.cartInfo}>
@@ -199,6 +216,12 @@ const styles = StyleSheet.create({
     backgroundColor: AppTheme.colors.primary, // Orange button
     borderWidth: 2,
     borderColor: '#FFF',
+  },
+  logoutButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    margin: 0,
   },
 });
 

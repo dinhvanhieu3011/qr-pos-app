@@ -1,31 +1,42 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, Alert, Image } from 'react-native';
 import { TextInput, Button, Text, Surface, useTheme } from 'react-native-paper';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { dragonBallStyles } from '../theme';
 
-// Hardcoded password as per requirements
+import { useAuth } from '../contexts/AuthContext';
+import { Checkbox } from 'react-native-paper';
+
+// Hardcoded password as per requirements (kept for reference, but AuthContext handles it)
 const PASSWORD = 'hieu1970';
 
-const LoginScreen = ({ navigation }: any) => {
+const LoginScreen = () => {
+  const { login, savedPassword } = useAuth();
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [savePassword, setSavePassword] = useState(false);
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false);
+  
   const theme = useTheme();
 
-  const handleLogin = () => {
-    if (password === PASSWORD) {
-      // Navigate to Main and reset stack to prevent going back to login
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Main' }],
-      });
-    } else {
+  React.useEffect(() => {
+    if (savedPassword) {
+      setPassword(savedPassword);
+      setSavePassword(true);
+    }
+  }, [savedPassword]);
+
+  const handleLogin = async () => {
+    const success = await login(password, savePassword, keepLoggedIn);
+    if (!success) {
       Alert.alert('Lỗi', 'Mật khẩu không đúng. Vui lòng thử lại.');
     }
+    // If success, the AuthProvider will update state and AppNavigator will switch screens automatically
   };
 
   return (
+    <SafeAreaProvider>
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.content}>
         <View style={styles.iconContainer}>
@@ -52,6 +63,27 @@ const LoginScreen = ({ navigation }: any) => {
             }
             onSubmitEditing={handleLogin}
           />
+
+          <View style={styles.checkboxContainer}>
+            <View style={styles.checkboxItem}>
+              <Checkbox.Android
+                status={savePassword ? 'checked' : 'unchecked'}
+                onPress={() => setSavePassword(!savePassword)}
+                color={theme.colors.primary}
+                uncheckedColor={theme.colors.primary}
+              />
+              <Text onPress={() => setSavePassword(!savePassword)}>Lưu mật khẩu</Text>
+            </View>
+            <View style={styles.checkboxItem}>
+              <Checkbox.Android
+                status={keepLoggedIn ? 'checked' : 'unchecked'}
+                onPress={() => setKeepLoggedIn(!keepLoggedIn)}
+                color={theme.colors.primary}
+                uncheckedColor={theme.colors.primary}
+              />
+              <Text onPress={() => setKeepLoggedIn(!keepLoggedIn)}>Duy trì đăng nhập</Text>
+            </View>
+          </View>
           
           <Button 
             mode="contained" 
@@ -64,6 +96,7 @@ const LoginScreen = ({ navigation }: any) => {
         </Surface>
       </View>
     </SafeAreaView>
+    </SafeAreaProvider>
   );
 };
 
@@ -102,6 +135,18 @@ const styles = StyleSheet.create({
   },
   buttonContent: {
     paddingVertical: 6,
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    flexWrap: 'wrap',
+  },
+  checkboxItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 10,
+    marginBottom: 10,
   }
 });
 

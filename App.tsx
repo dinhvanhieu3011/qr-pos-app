@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import { AppTheme } from './src/theme';
 
+import { AuthProvider } from './src/contexts/AuthContext';
 import { ProductProvider } from './src/contexts/ProductContext';
 import { CartProvider } from './src/contexts/CartContext';
 import { InvoiceProvider } from './src/contexts/InvoiceContext';
@@ -13,7 +14,8 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <PaperProvider theme={AppTheme}>
-        <ProductProvider>
+        <AuthProvider>
+          <ProductProvider>
           <InvoiceProvider>
             <CartProvider>
               <NavigationContainer>
@@ -21,7 +23,8 @@ export default function App() {
               </NavigationContainer>
             </CartProvider>
           </InvoiceProvider>
-        </ProductProvider>
+          </ProductProvider>
+        </AuthProvider>
       </PaperProvider>
     </SafeAreaProvider>
   );

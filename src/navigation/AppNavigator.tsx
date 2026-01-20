@@ -2,6 +2,8 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { ActivityIndicator, View } from 'react-native';
+import { useAuth } from '../contexts/AuthContext';
 
 import PosScreen from '../screens/PosScreen';
 import ProductListScreen from '../screens/ProductListScreen';
@@ -39,33 +41,48 @@ const TabNavigator = () => {
 };
 
 const AppNavigator = () => {
+const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
   return (
-    <Stack.Navigator initialRouteName="Login">
-      <Stack.Screen 
-        name="Login" 
-        component={LoginScreen} 
-        options={{ headerShown: false }} 
-      />
-      <Stack.Screen 
-        name="Main" 
-        component={TabNavigator} 
-        options={{ headerShown: false }} 
-      />
-      <Stack.Screen 
-        name="ProductForm" 
-        component={ProductFormScreen} 
-        options={{ title: 'Thông tin sản phẩm' }}
-      />
-      <Stack.Screen 
-        name="Cart" 
-        component={CartScreen} 
-        options={{ title: 'Giỏ hàng' }} 
-      />
-      <Stack.Screen 
-        name="InvoiceDetail" 
-        component={InvoiceDetailScreen} 
-        options={{ title: 'Chi tiết hóa đơn' }} 
-      />
+    <Stack.Navigator>
+      {!isAuthenticated ? (
+        <Stack.Screen 
+          name="Login" 
+          component={LoginScreen} 
+          options={{ headerShown: false }} 
+        />
+      ) : (
+        <>
+          <Stack.Screen 
+            name="Main" 
+            component={TabNavigator} 
+            options={{ headerShown: false }} 
+          />
+          <Stack.Screen 
+            name="ProductForm" 
+            component={ProductFormScreen} 
+            options={{ title: 'Thông tin sản phẩm' }}
+          />
+          <Stack.Screen 
+            name="Cart" 
+            component={CartScreen} 
+            options={{ title: 'Giỏ hàng' }} 
+          />
+          <Stack.Screen 
+            name="InvoiceDetail" 
+            component={InvoiceDetailScreen} 
+            options={{ title: 'Chi tiết hóa đơn' }} 
+          />
+        </>
+      )}
     </Stack.Navigator>
   );
 };
